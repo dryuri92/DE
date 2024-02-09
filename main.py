@@ -1,13 +1,12 @@
 from __future__ import annotations
 import uvicorn
 from datetime import datetime
-from typing import List, Optional, Dict, Annotated
+from typing import  Optional, Annotated
 
 from fastapi import FastAPI, Query, HTTPException, status, Depends, Request
 
-from models import Event, Filters, Granularity, Filter
+from models import Event, Granularity, Filter
 from controllers import Controller
-import asyncio
 import os
 
 config = {}
@@ -22,7 +21,7 @@ try:
     config["tablename"] = os.environ["DBTABLE"].rstrip()
     config["datetimeField"] = os.environ["DBDATEFIELD"] or "event_date"
 except Exception as E:
-    print(f"mistake {E}")
+    print(f"Exception caught switch to pandas engine: {E}")
     config["engine"] = "pandas"
     config["tablename"] = "./data/events.csv"
     config["datetimeField"] = "event_date"

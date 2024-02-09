@@ -1,16 +1,20 @@
-from db import QueryBuilder, Query, Engine, GetDbEngine
-import asyncio
+from db import QueryBuilder, GetDbEngine
 from datetime import datetime
-from models import Event, Filters, Granularity, Filter
+from models import Event, Granularity
 
 class Controller:
     #
     def __init__(self, config: dict):
+        """Initialize a controller instance.
+
+        Args:
+            config: Configuration settings."""
         self._config = config
         self._engine = GetDbEngine(self._config)
         print(f"meet the engine:{self._engine}")
     #
     async def connect(self):
+        """Connect to the configured database. """
         if not self._engine.connect():
             await self._engine.establishConnection()
     async def getEvents(self,
@@ -22,8 +26,17 @@ class Controller:
                         start_date: datetime | None=None,
                         end_date: datetime | None=None,
                         )-> dict:
-        
-        print(f"DEBUG[controller]: filters, gran {filters} and {granularity.value}")
+        """Fetch events from the database according to the provided configurations.
+            Args:
+                metrics: Comma-separated list of metric keys.
+                group: Group key(s), separated by commas.
+                granularity: Granularity enum indicating the resolution of data points.
+                filters: Optional list of equal comparisons to apply.
+                start_date: Start date for time series filter.
+                end_date: End date for time series filter.
+            Returns:
+                Dictionary containing requested metrics organized by groups.
+        """
         query, parameters = QueryBuilder(
                               engine=self._config["engine"],
                               action="SELECT",
@@ -38,7 +51,6 @@ class Controller:
                               dateField = self._config["datetimeField"],
                               groupBy=group.split(","))
         try:
-            print(f"meet the query {query.query} with parameters {parameters}")
             result = await self._engine.fetch(query, parameters)
         except:
              raise Exception("Can not execute Query")
@@ -46,6 +58,12 @@ class Controller:
     #
     async def postEvent(self,
                         event: Event)->bool:
+        """Insert a single event entry into the database.
+            Args:
+                event: An instance of the Event model.
+            Returns:
+                 Boolean indicating success status.
+        """
         query, parameters = QueryBuilder(
                                 engine=self._config["engine"],
                                 action="INSERT",
@@ -61,7 +79,6 @@ class Controller:
                                           "metric1": event.metric1,
                                           "metric2": event.metric2})
         try:
-            print(f"meet the query {query.query} with parameters {parameters}")
             await self._engine.execute(query, parameters)
         except:
             raise Exception("Can not execute Query")

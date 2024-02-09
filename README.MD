@@ -53,10 +53,6 @@ It is recomended to use `make` to simplify installation process [https://www.gnu
    ```sh
    IMAGE_NAME:=<your_image> IMAGE_TAG := <your_tag> make publish
    ```
-3. Also you can deploy your app on Kubernetes cluster
-   ```sh
-   IMAGE_NAME:=<your_image> IMAGE_TAG := <your_tag> make k8s-deploy
-   ```
 
 ### Usage
 The application can be customized using environmental variables:

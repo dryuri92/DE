@@ -2,8 +2,8 @@ from .postgre import *
 from .pand import *
 from .query import *
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import List, Optional, Dict
+from datetime import datetime
+from typing import List, Optional, Dict, Any
 from abc import abstractmethod, ABC
 import asyncpg
 import asyncio
@@ -22,16 +22,35 @@ class Engine(ABC):
         ...
     
 class PandasEngine(Engine):
+    """Pandas-based implementation of the Engine interface."""
     def __init__(self, **kwargs):
+        """Initializes the PandasEngine instance.
+        
+        Args:
+            filename (str): Path to the CSV file.
+        """
         self._filename = kwargs["tablename"]
         self._df = pd.DataFrame()
     def connect(self)->bool:
+        """Connects to the underlying storage system - always successful in this case.
+        
+        Returns:
+            bool: Always returns True.
+        """
         return True
-    async def fetch(self,query:Query, parameters: list[any], **kwargs):
+    async def fetch(self,query:Query, parameters: list[any], **kwargs) -> List[Dict[str, Any]]:
+        """Fetches records matching the given query and parameters.
+        
+        Args:
+            query (Query): The query object specifying the selection criteria.
+            parameters (List[Any]): Parameters needed to evaluate the query.
+        
+        Returns:
+            List[Dict[str, Any]]: A list of dictionaries representing the fetched records.
+        """
         try:
             self._df = pd.read_csv(self._filename, index_col=False)
             params = []
-            print(f"2.DEBUG PARAMETERS {parameters} with {query.dateField} with {query.dateType}")
             for p in parameters:
                 if (type(p) is datetime):
                     s = p.strftime("%Y-%m-%dT%H:%M:%S")
@@ -40,23 +59,22 @@ class PandasEngine(Engine):
                     params.append(f"'{p}'")
                 else:
                     params.append(p)
-            q_ = query.query['filter'].format(*tuple(params))
             self._df[query.dateField] = self._df[query.dateField].values.astype(query.dateType)
-            print(f"it is query{self._df} and {q_}")    
             df=self._df.query(query.query['filter'].format(*tuple(params)))
-            print(f"it is query{df} and 1")
             df=df.groupby(query.query['group']).apply(lambda x:x)
-            print(f"it is query{df} and 2")
             df = df.filter(items=query.query["fields"])
-            print(f"it is query{df} and 3")
         except Exception as E:
-            print(f"Meet except {E}")
             raise RuntimeError(f"Meet except {E}")
-        print(f"2.debug it is query{df} and {query.query['group']}")
-        print([df.iloc[i].to_dict() for i in range(len(df))])
         await asyncio.sleep(0)
         return [df.iloc[i].to_dict() for i in range(len(df))]
     async def execute(self,query:Query, parameters: list[any], **kwargs):
+        """Executes the given query against the underlying storage system.
+        
+        Args:
+            query (Query): The query object specifying the execution details.
+            parameters (List[Any]): Parameters needed to execute the query.
+
+        """
         try:
             self._df = self._df._append(query.query,ignore_index=True)
             self._df.to_csv(self._filename, index=False)
@@ -65,10 +83,22 @@ class PandasEngine(Engine):
         await asyncio.sleep(0)
 
 class PostgreEngine(Engine):
+    """PostgreSQL-based implementation of the Engine interface."""
     def __init__(self, **kwargs):
+        """Initializes the PostgreEngine instance.
+
+        Raises:
+            KeyError: When mandatory initialization parameters are missing.
+
+        Args:
+            dbhost (str): Database host address.
+            dbuser (str): Username to access the database.
+            dbpassword (str): Password to authenticate the user.
+            dbname (str): Name of the database to interact with.
+            tablename (str): Table name within the database.
+        """
         self._connected = False
         self._conn=None
-        print(f"postgre kwargs is {kwargs}")
         try:
             self._host = kwargs["dbhost"]
             self._user = kwargs["dbuser"]
@@ -78,6 +108,7 @@ class PostgreEngine(Engine):
         except KeyError as K:
             print(f"Not enough argument to Postgre connection {K}")
     async def establishConnection(self):
+        """Establishes an asynchronous connection to the PostgreSQL server."""
         try:
             self._conn = await asyncpg.connect(user=self._user,
                                                password=self._password,
@@ -87,31 +118,45 @@ class PostgreEngine(Engine):
         except:
             print("Could not establish connection")
     def connect(self)->bool:
+        """Checks if connected to the PostgreSQL server."""
         return self._connected
-    async def fetch(self,query:Query, parameters: list[any], **kwargs):
-        print(f"DEBUG [fetch] {parameters} {query.query}")
+    async def fetch(self,query:Query, parameters: List[any], **kwargs)-> List[Dict[str, Any]]:
+        """Queries the PostgreSQL server and returns the result.
+
+        Args:
+            query (Query): The query object specifying the selection criteria.
+            parameters (List[any]): Parameters needed to evaluate the query.
+
+        Returns:
+            List[Dict[str, any]]: Results returned from the executed query.
+
+        Raises:
+            RuntimeError: In case of an unexpected exception during fetch.
+        """
         try:
             values = await self._conn.fetch(
             query.query,
             *parameters,
             )
         except Exception as E:
-            print(f"fetch exception is {E}")
             raise RuntimeError("fetch exception is {E}")
-        print(f"Return {values}")
         return values
-    async def execute(self,query:Query, parameters: list[any], **kwargs):
-        print(parameters)
+    async def execute(self,query:Query, parameters: List[any], **kwargs):
+        """Executes the given query on PostgreSQL server.
+        
+        Args:
+            query (Query): The query object specifying the execution details.
+            parameters (List[Any]): Parameters needed to execute the query.
+
+        """
         async with self._conn.transaction():
-            cmd = f"{query.query} {tuple(parameters)};"
-            print("cmd is ", cmd)
             try:
                 await self._conn.execute(f"{query.query} {tuple(parameters)};")
             except Exception as E:
-                print(f"Exceptionis {E}")
                 raise RuntimeError(f"Can not execute a query: {E}")
     
 def GetDbEngine(config: dict)->Engine:
+    """Retrieves data source"""
     engine = config["engine"]
     print(f"confing {config}")
     if engine == "pandas":
@@ -121,55 +166,54 @@ def GetDbEngine(config: dict)->Engine:
     
 class QueryBuilder:
     def __new__(cls, engine: str, action: str, **kwargs):
+        """Builds a query object based on the given parameters.
+
+        Args:
+            engine (str): Database engine identifier. Can be either "postgres" or "pandas".
+            action (str): Type of query. Can be either "select" or "insert".
+            **kwargs: Additional keyword arguments depending on the chosen engine.
+
+        Returns:
+            Optional[Tuple]: A tuple containing the built query object and a list of parameters.
+        """
         parameters=[]
         if (engine=="postgres"):
             fields = kwargs.get("fields") if kwargs.get("fields") else []
-            print(f"DEBUG in query builder {cls} 1")
             query = PGSQLQuery(
                 fields=fields,
                 tablename=kwargs["tablename"],
                 action=action)
-            print(f"DEBUG in query builder {cls} 2")
             if (action == "insert"):
                 parameters.extend(fields)
-            print(f"DEBUG in query builder {kwargs} 3")
             if ("filters" in kwargs):
                 for compare, filters in kwargs["filters"].items():
 
                     query.filter(filters=[f["attribute"] for f in filters  if (f["value"] is not None)], compare=compare)
                     parameters.extend([f["value"] for f in filters  if (f["value"] is not None)])
-            print(f"DEBUG in query builder {cls} 4")
             if ("groupBy" in kwargs):
                 query.groupBy(kwargs["groupBy"])
-            print(f"DEBUG in query builder {cls} 5")
             if ("granularity" in kwargs):
                 query.granularity(kwargs["dateField"],kwargs["granularity"])
-            print(f"DEBUG in query builder {cls} 6")
             if ("values" in kwargs):
                 items = kwargs["values"].items()
                 parameters = [item[1] for item in items]
                 query.values([item[0] for item in items])
-            print(f"DEBUG in query builder {cls} 7")
             return query, parameters
         elif (engine == "pandas"):
             fields = kwargs.get("fields") if kwargs.get("fields") else []
-            query = PandasQuery(fields=fields, tablename="events.csv", action=action)
+            query = PandasQuery(fields=fields, tablename=kwargs["tablename"], action=action)
             if (action == "insert"):
                 parameters.extend(fields)
             if ("filters" in kwargs):
-                print("debug 1")
                 for compare, filters in kwargs["filters"].items():
-                    print(f"debug 1: filters is {filters}")
                     query.filter(filters=[f["attribute"] for f in filters if (f["value"] is not None)], compare=compare)
                     parameters.extend([f["value"] for f in filters if (f["value"] is not None)])
             if ("groupBy" in kwargs):
                 query.groupBy(kwargs["groupBy"])
             if ("granularity" in kwargs):
-                print("debug 2", kwargs["dateField"], kwargs["granularity"])
                 query.granularity(kwargs["dateField"],kwargs["granularity"])
             if ("values" in kwargs):
                 query.values(kwargs["values"])
-            print("debug 3")
             return query, parameters
         return None, None
 

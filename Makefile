@@ -15,18 +15,12 @@ build-docker:
 	docker build . -t $(IMAGE_NAME):$(IMAGE_TAG)
 
 compose-postgres:
-	docker-compose -f .\compose\docker-compose.yaml up -d
+	docker-compose -f ./compose/docker-compose.yaml up -d
 
 compose-pandas:
-	docker-compose -f .\compose\docker-compose-pandas.yaml up -d
+	docker-compose -f ./compose/docker-compose-pandas.yaml up -d
 
-publish:
-	build-docker
-	docker push $(IMAGE_NAME):$(IMAGE_TAG) 
-
-k8s-deploy:
-	build-docker
-	publish
-	kubectl apply -f ./manifest/deploy.yaml
+publish: build-docker
+	docker push $(IMAGE_NAME):$(IMAGE_TAG)
 
 
