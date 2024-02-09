@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pandas
+openpyxl
+python-multipart
+pytest
+pytest-cov
+pytest-asyncio
+pytest-mock
+aiohttp
+asyncpg

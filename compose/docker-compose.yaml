@@ -1,0 +1,43 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: test_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - ../local_pgdata/add_schema.sql:/docker-entrypoint-initdb.d/db.sql
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    ports:
+      - "8880:80"
+  app: 
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    command: python main.py
+    environment:
+      ENGINE: postgres
+      DBNAME: test_db
+      DBHOST: postgres
+      DBPORT: 5432
+      DBUSER: root
+      DBPASSWORD: root
+      DBTABLE: cd.events
+      DBDATEFIELD: event_date
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8888
+    ports: 
+      - "8888:8888"
+    volumes:
+      - "../data:/home/user/app/data"
+    depends_on:
+      - postgres
+#volumes:
+#  local_pgdata:
